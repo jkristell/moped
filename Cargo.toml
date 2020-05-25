@@ -1,0 +1,11 @@
+[package]
+name = "moped"
+version = "0.1.0"
+authors = ["Johan Kristell <johan@jott.se>"]
+edition = "2018"
+
+[dependencies]
+async-mpd = { path = "../async-mpd" }
+# Example, use the version numbers you need
+tide = "0.9.0"
+async-std = { version = "1.6.0", features = ["attributes"] }
