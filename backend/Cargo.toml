@@ -1,0 +1,20 @@
+[package]
+name = "moped-backend"
+version = "0.1.0"
+authors = ["Johan Kristell <johan@jott.se>"]
+edition = "2018"
+keywords = ["mpd"]
+license = "MIT OR Apache-2.0"
+description = "Mpd to json"
+categories = ["network-programming"]
+repository = "https://github.com/jkristell/moped"
+readme = "README.md"
+workspace = ".."
+
+[dependencies]
+async-mpd = "0.1.0"
+femme = "2.1.0"
+log = "0.4.8"
+tide = "0.9.0"
+serde = { version = "1.0", features = ["derive"] }
+async-std = { version = "1.6.0", features = ["attributes"] }
