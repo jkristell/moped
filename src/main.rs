@@ -1,52 +1,39 @@
-
 use async_mpd::{MpdClient, Status};
-use tide::{Request, Response, StatusCode};
 use async_std::sync::{Arc, Mutex};
+use tide::{Request, Response, StatusCode};
+
+mod player;
 
 struct State {
     mpd: Mutex<MpdClient>,
 }
 
-async fn api_status(req: Request<State>) -> tide::Result {
-    let mut mpd = req.state().mpd.lock().await;
-    let status = mpd.status().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&status)?)
-}
-
-async fn api_play(req: Request<State>) -> tide::Result {
-    let mut mpd = req.state().mpd.lock().await;
-    let _ = mpd.paus(false).await?;
-    Ok(Response::new(StatusCode::Ok))
-}
-
-async fn api_next(req: Request<State>) -> tide::Result {
-    let mut mpd = req.state().mpd.lock().await;
-    let _ = mpd.next().await?;
-    Ok(Response::new(StatusCode::Ok))
-}
-
-async fn api_queue_list(req: Request<State>) -> tide::Result {
-    let mut mpd = req.state().mpd.lock().await;
-    let list = mpd.queue_list().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&list)?)
-}
-
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
-
     femme::with_level(tide::log::Level::Trace.to_level_filter());
 
-    let mut app = tide::with_state(State {
-        mpd: Mutex::new(MpdClient::new("volumio.lan:6600").await?),
-    });
-    app.at("/").get(|_| async { Ok("Hello, world!") });
+    let state = State {
+        mpd: Mutex::new(MpdClient::new("localhost:6600").await?),
+    };
 
-    /*
-    app.at("/api/v1/status").get(api_status);
-    app.at("/api/v1/play").get(api_play);
-    app.at("/api/v1/next").get(api_next);
-     */
-    app.at("/api/v1/queue/list").get(api_queue_list);
+    let mut app = tide::with_state(state);
+
+    // Status and statistics
+    app.at("/api/v1/status").get(player::status);
+    app.at("/api/v1/stats").get(player::stats);
+
+    // Player control and options
+    app.at("/api/v1/player/control").post(player::control);
+    app.at("/api/v1/player/volume").post(player::volume);
+    app.at("/api/v1/player/options").post(player::options);
+
+    // Queue and playlists
+    app.at("/api/v1/queue").get(player::playqueue);
+    app.at("/api/v1/queue/goto").post(player::playqueue_goto);
+
+    //TODO: Filesystem
+
+    //TODO: Search & find
 
     app.listen("127.0.0.1:8080").await?;
     Ok(())
