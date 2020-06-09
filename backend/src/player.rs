@@ -5,6 +5,7 @@ use tide::{Request, Response, StatusCode, Body};
 use serde::{Deserialize, Serialize};
 
 use crate::State;
+use shared::{PlayQueueGoto, PlayControl, Action, VolumeControl, PlayerOptions};
 
 pub(crate) async fn status(req: Request<State>) -> tide::Result {
     let mut mpd = req.state().mpd.lock().await;
@@ -25,19 +26,12 @@ pub(crate) async fn stats(req: Request<State>) -> tide::Result {
 }
 
 pub(crate) async fn playqueue(req: Request<State>) -> tide::Result {
-    let mut mpd = req.state().mpd.lock().await;
+    let mut mpd = req.state().mpd().await?;
     let queue = mpd.queue().await?;
     let mut r = Response::new(StatusCode::Ok);
     r.set_body(Body::from_json(&queue)?);
     Ok(r)
 }
-
-
-#[derive(Deserialize, Debug)]
-pub struct PlayQueueGoto {
-    id: i32,
-}
-
 
 pub(crate) async fn playqueue_goto(mut req: Request<State>) -> tide::Result {
     let pqp: PlayQueueGoto = req.body_json().await?;
@@ -49,33 +43,6 @@ pub(crate) async fn playqueue_goto(mut req: Request<State>) -> tide::Result {
     let mut r = Response::new(StatusCode::Ok);
     r.set_body(Body::from_json(&status)?);
     Ok(r)
-}
-
-
-#[derive(Deserialize, Debug)]
-pub enum Action {
-    Play,
-    Pause,
-    Stop,
-    Prev,
-    Next,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct PlayControl {
-    action: Action,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct VolumeControl {
-    volume: i32,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct PlayerOptions {
-    repeat: Option<bool>,
-    random: Option<bool>,
-    consume: Option<bool>,
 }
 
 pub(crate) async fn control(mut req: Request<State>) -> tide::Result {

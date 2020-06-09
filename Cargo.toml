@@ -1,13 +1,2 @@
-[package]
-name = "moped"
-version = "0.1.0"
-authors = ["Johan Kristell <johan@jott.se>"]
-edition = "2018"
-
-[dependencies]
-async-mpd = { path = "../async-mpd" }
-femme = "2.1.0"
-log = "0.4.8"
-tide = "0.10.0"
-serde = { version = "1.0", features = ["derive"] }
-async-std = { version = "1.6.0", features = ["attributes"] }
+[workspace]
+members = ["backend", "frontend","shared"]
