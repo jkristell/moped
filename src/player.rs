@@ -1,6 +1,6 @@
 use async_mpd::{MpdClient, Status};
 use async_std::sync::{Arc, Mutex};
-use tide::{Request, Response, StatusCode};
+use tide::{Request, Response, StatusCode, Body};
 
 use serde::{Deserialize, Serialize};
 
@@ -9,19 +9,27 @@ use crate::State;
 pub(crate) async fn status(req: Request<State>) -> tide::Result {
     let mut mpd = req.state().mpd.lock().await;
     let status = mpd.status().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&status)?)
+
+    let mut r = Response::new(StatusCode::Ok);
+    r.set_body(Body::from_json(&status)?);
+    Ok(r)
 }
 
 pub(crate) async fn stats(req: Request<State>) -> tide::Result {
     let mut mpd = req.state().mpd.lock().await;
     let stats = mpd.stats().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&stats)?)
+    let mut r = Response::new(StatusCode::Ok);
+    r.set_body(Body::from_json(&stats)?);
+    Ok(r)
+
 }
 
 pub(crate) async fn playqueue(req: Request<State>) -> tide::Result {
     let mut mpd = req.state().mpd.lock().await;
     let queue = mpd.queue().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&queue)?)
+    let mut r = Response::new(StatusCode::Ok);
+    r.set_body(Body::from_json(&queue)?);
+    Ok(r)
 }
 
 
@@ -38,7 +46,9 @@ pub(crate) async fn playqueue_goto(mut req: Request<State>) -> tide::Result {
     mpd.playid(pqp.id).await?;
 
     let status = mpd.status().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&status)?)
+    let mut r = Response::new(StatusCode::Ok);
+    r.set_body(Body::from_json(&status)?);
+    Ok(r)
 }
 
 
@@ -70,7 +80,7 @@ pub struct PlayerOptions {
 
 pub(crate) async fn control(mut req: Request<State>) -> tide::Result {
     let ctrl: PlayControl = req.body_json().await?;
-    let mut mpd = req.state().mpd.lock().await;
+    let mut mpd = req.state().mpd().await?;
 
     log::info!("ctrl: {:?}", ctrl);
 
@@ -84,7 +94,9 @@ pub(crate) async fn control(mut req: Request<State>) -> tide::Result {
 
     // Get status and send that back to client
     let status = mpd.status().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&status)?)
+    let mut r = Response::new(StatusCode::Ok);
+    r.set_body(Body::from_json(&status)?);
+    Ok(r)
 }
 
 pub(crate) async fn volume(mut req: Request<State>) -> tide::Result {
@@ -97,7 +109,10 @@ pub(crate) async fn volume(mut req: Request<State>) -> tide::Result {
 
     // Get status and send that back to client
     let status = mpd.status().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&status)?)
+    let mut r = Response::new(StatusCode::Ok);
+    r.set_body(Body::from_json(&status)?);
+    Ok(r)
+
 }
 
 pub(crate) async fn options(mut req: Request<State>) -> tide::Result {
@@ -118,5 +133,7 @@ pub(crate) async fn options(mut req: Request<State>) -> tide::Result {
 
     // Get status and send that back to client
     let status = mpd.status().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&status)?)
+    let mut r = Response::new(StatusCode::Ok);
+    r.set_body(Body::from_json(&status)?);
+    Ok(r)
 }
