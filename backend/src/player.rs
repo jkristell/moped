@@ -5,10 +5,10 @@ use tide::{Request, Response, StatusCode, Body};
 use serde::{Deserialize, Serialize};
 
 use crate::State;
-use shared::{PlayQueueGoto, PlayControl, Action, VolumeControl, PlayerOptions};
+use shared::{PlayQueueGoto, PlayControl, Action, VolumeControl, PlayerOptions, PlayQueueAddPath};
 
 pub(crate) async fn status(req: Request<State>) -> tide::Result {
-    let mut mpd = req.state().mpd.lock().await;
+    let mut mpd = req.state().mpd().await?;
     let status = mpd.status().await?;
 
     let mut r = Response::new(StatusCode::Ok);
@@ -35,13 +35,36 @@ pub(crate) async fn playqueue(req: Request<State>) -> tide::Result {
 
 pub(crate) async fn playqueue_goto(mut req: Request<State>) -> tide::Result {
     let pqp: PlayQueueGoto = req.body_json().await?;
-    let mut mpd = req.state().mpd.lock().await;
+    let mut mpd = req.state().mpd().await?;
 
     mpd.playid(pqp.id).await?;
 
     let status = mpd.status().await?;
     let mut r = Response::new(StatusCode::Ok);
     r.set_body(Body::from_json(&status)?);
+    Ok(r)
+}
+
+pub(crate) async fn playqueue_addpath(mut req: Request<State>) -> tide::Result {
+    let pqp: PlayQueueAddPath = req.body_json().await?;
+    let mut mpd = req.state().mpd().await?;
+
+    mpd.queue_add(&pqp.path).await?;
+
+    let status = mpd.status().await?;
+    let mut r = Response::new(StatusCode::Ok);
+    r.set_body(Body::from_json(&status)?);
+    Ok(r)
+}
+
+pub(crate) async fn playqueue_clear(req: Request<State>) -> tide::Result {
+    let mut mpd = req.state().mpd().await?;
+
+    mpd.queue_clear().await?;
+    let queue = mpd.queue().await?;
+
+    let mut r = Response::new(StatusCode::Ok);
+    r.set_body(Body::from_json(&queue)?);
     Ok(r)
 }
 
@@ -68,7 +91,7 @@ pub(crate) async fn control(mut req: Request<State>) -> tide::Result {
 
 pub(crate) async fn volume(mut req: Request<State>) -> tide::Result {
     let ctrl: VolumeControl = req.body_json().await?;
-    let mut mpd = req.state().mpd.lock().await;
+    let mut mpd = req.state().mpd().await?;
 
     mpd.setvol(ctrl.volume).await?;
 
@@ -79,7 +102,6 @@ pub(crate) async fn volume(mut req: Request<State>) -> tide::Result {
     let mut r = Response::new(StatusCode::Ok);
     r.set_body(Body::from_json(&status)?);
     Ok(r)
-
 }
 
 pub(crate) async fn options(mut req: Request<State>) -> tide::Result {

@@ -5,10 +5,10 @@ pub use async_mpd::{Status, Track};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PlayQueueGoto {
-    pub id: i32,
+    pub id: u32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Copy, Clone, Serialize, Deserialize, Debug)]
 pub enum Action {
     Play,
     Pause,
@@ -24,7 +24,7 @@ pub struct PlayControl {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct VolumeControl {
-    pub volume: i32,
+    pub volume: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -33,6 +33,26 @@ pub struct PlayerOptions {
     pub random: Option<bool>,
     pub consume: Option<bool>,
 }
+#[derive(Copy, Clone, Serialize, Deserialize, Debug)]
+pub enum LsFilter {
+    File,
+    Dir,
+    Playlist,
+    None,
+}
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DatabaseLs {
+    pub path: String,
+    pub filter: LsFilter,
+}
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DatabaseLsRes {
+    pub dirs: Vec<String>,
+}
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PlayQueueAddPath {
+    pub path: String,
+}
