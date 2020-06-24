@@ -3,6 +3,8 @@ name = "moped"
 version = "0.1.0"
 authors = ["Johan Kristell <johan@jott.se>"]
 edition = "2018"
+description = "Moped backend server"
+license = "MIT"
 
 [dependencies]
 async-mpd = "0.2.1"
