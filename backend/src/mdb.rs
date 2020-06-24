@@ -5,7 +5,7 @@ use tide::{Request, Response, StatusCode, Body};
 use serde::{Deserialize, Serialize};
 
 use crate::State;
-use shared::{DatabaseLs, LsFilter, DatabaseLsRes};
+use moped_shared::{DatabaseLs, LsFilter, DatabaseLsRes};
 
 pub(crate) async fn all(req: Request<State>) -> tide::Result {
     let mut mpd = req.state().mpd().await?;
