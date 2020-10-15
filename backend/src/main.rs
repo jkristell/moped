@@ -1,6 +1,6 @@
-use async_mpd::{MpdClient, Status};
-use async_std::sync::{Arc, Mutex};
-use tide::{Request, Response, StatusCode, http::headers::HeaderValue};
+use async_mpd::{MpdClient};
+use async_std::sync::{Mutex};
+use tide::{Response, StatusCode, http::headers::HeaderValue};
 use tide::security::{
     Origin,
     CorsMiddleware,
@@ -8,6 +8,7 @@ use tide::security::{
 
 mod player;
 mod mdb;
+mod artwork;
 
 struct State {
     mpdaddr: String,
@@ -64,6 +65,8 @@ async fn main() -> Result<(), std::io::Error> {
 
     //TODO: Set server address
 
+    //TODO: Album artwork
+    app.at("/api/v1/artwork/:path").get(artwork::get);
 
     //TODO: Search
 

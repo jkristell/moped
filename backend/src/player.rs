@@ -1,8 +1,4 @@
-use async_mpd::{MpdClient, Status};
-use async_std::sync::{Arc, Mutex};
 use tide::{Request, Response, StatusCode, Body};
-
-use serde::{Deserialize, Serialize};
 
 use crate::State;
 use shared::{PlayQueueGoto, PlayControl, Action, VolumeControl, PlayerOptions, PlayQueueAddPath};

@@ -48,6 +48,13 @@ pub struct DatabaseLs {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+/// A generic path argument to various functions
+pub struct Path {
+    pub path: String,
+}
+
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct DatabaseLsRes {
     pub dirs: Vec<String>,
 }

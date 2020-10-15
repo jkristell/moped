@@ -1,6 +1,3 @@
-// (Lines like the one below ignore selected Clippy rules
-//  - it's useful when you want to check your code with `cargo make verify`
-// but some rules are too "annoying" or are not applicable for your case.)
 #![allow(clippy::wildcard_imports)]
 
 use seed::{prelude::*, *};
@@ -11,7 +8,6 @@ use shared::{PlayControl, Action, Status, Track, PlayQueueGoto, DatabaseLs, LsFi
 //     Init
 // ------ ------
 
-// `init` describes what should happen when your app started.
 fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
 
     orders.perform_cmd(playqueue_get());
@@ -25,8 +21,7 @@ fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
         status: Status::default(),
         playqueue: Vec::default(),
         active_tab: 0,
-        counter: 0,
-        path: "".into(),
+        dbpath: "/".into(),
         dbdirs: Vec::new(),
     }
 }
@@ -35,14 +30,12 @@ fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
 //     Model
 // ------ ------
 
-// `Model` describes our app state.
 struct Model {
     message: Option<String>,
     status: Status,
     playqueue: Vec<Track>,
     active_tab: usize,
-    counter: usize,
-    path: String,
+    dbpath: String,
     dbdirs: Vec<String>,
 }
 
@@ -54,18 +47,21 @@ struct Model {
 enum Msg {
     PlayControl(Action),
     SubmitFailed(String),
+
     GetStatus,
     UpdateStatus(Status),
+    
     GetPlayQueue,
     UpdatePlayqueue(Vec<Track>),
     PlayqueuePlay(u32),
+    PlayqueueAdd(String),
+
     TabSelect(usize),
     OnTick,
 
     GetDbDir(String),
     UpdateDbDirs(DatabaseLsRes),
     ChangePath (String),
-    PlayqueueAdd(String),
     Volume(String),
     ClearPlayqueue,
 }
@@ -84,14 +80,14 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             orders.perform_cmd(post_cmd("player/volume", q));
             seed::log(vols);
         },
-        Msg::GetDbDir(path) => {
+        Msg::GetDbDir(_path) => {
             orders.perform_cmd(post_dblist());
         }
         Msg::UpdateDbDirs(dirs) => {
             model.dbdirs = dirs.dirs;
         }
         Msg::ChangePath(newpath) => {
-            model.path = newpath;
+            model.dbpath = newpath;
         }
         Msg::PlayqueueAdd(path) => {
             let q = PlayQueueAddPath { path };
@@ -128,7 +124,6 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             model.active_tab = tabid;
         }
         Msg::OnTick => {
-            model.counter += 1;
             orders.perform_cmd(get_status());
         }
     }
@@ -233,22 +228,18 @@ async fn post_dblist() -> Msg {
 
 fn db_view(model: &Model) -> Node<Msg> {
 
-    let dirs = dirs_in_path(&model.path, &model.dbdirs);
+    let mut current_dir = model.dbpath.to_string();
 
-    let mut root = if model.path == "" || model.path == "/" {
-        "".to_string()
-    } else {
-        format!("{}/", model.path)
-    };
+    if !current_dir.ends_with('/') {
+        current_dir.push('/');
+    }
 
-    let modelpath = if model.path == "/" {
-        ""
-    } else {
-        &model.path
-    };
+    // Folders in the current dir
+    let dirs = dirs_in_path(&current_dir, &model.dbdirs);
 
-    let fullpath_display = modelpath
+    let fullpath_display = current_dir.as_str()
         .split('/')
+        .filter(|elem| !elem.is_empty())
         .scan(String::new(), |state, part| {
             state.push_str(part);
             state.push('/');
@@ -291,8 +282,11 @@ fn db_view(model: &Model) -> Node<Msg> {
 
         C!["ui four cards"],
         dirs.iter()
-            .map(|dirname| (dirname, format!("{}{}", root, dirname), format!("{}{}", root, dirname)))
-            .map(|(dirname, fullpath, fp2)|
+            .map(|dirname| {
+                let fullpath = format!("{}{}", current_dir, dirname);
+                (dirname, fullpath.clone(), fullpath)
+            })
+            .map(|(dirname, fp1, fp2)|
             div![
                 C!["ui card"],
                 a![
@@ -301,7 +295,7 @@ fn db_view(model: &Model) -> Node<Msg> {
                         C!["ui placeholder"],
                         div![C!["image"]]
                     ],
-                    ev(Ev::Click, move |_| Msg::ChangePath(fullpath.clone())),
+                    ev(Ev::Click, move |_| Msg::ChangePath(fp1.clone())),
                 ],
                 div![
                     C!["content"],
@@ -327,18 +321,9 @@ fn db_view(model: &Model) -> Node<Msg> {
 
 pub fn dirs_in_path(path: &str, dirs: &[String]) -> Vec<String> {
 
-    let path = if path == "/" || path == "" {
-        "".to_string()
-    } else if !path.ends_with('/') {
-        format!("{}/", path)
-    } else {
-        path.to_string()
-    };
-
-    dirs
-        .iter()
+    dirs.iter()
         .filter_map(|s| {
-            if s.starts_with(&path) {
+            if s.starts_with(path) {
                 let t = &s[path.len()..];
                 if !t.contains('/') {
                     Some(t.to_string())
@@ -429,8 +414,8 @@ fn view(model: &Model) -> Node<Msg> {
 
     if let Some(song) = model.status.song {
         if let Some(t) = model.playqueue.get(song as usize) {
-            artist = t.artist.clone().unwrap_or_default();
-             title = t.title.clone().unwrap_or_default();
+            artist = t.artist.clone().unwrap_or_else(|| "Missing Artist".into());
+            title = t.title.clone().unwrap_or_else(|| "Missing title".into());
         }
     }
 
