@@ -1,7 +1,7 @@
 use tide::{Request, Response, StatusCode, Body};
 
 use crate::State;
-use shared::{PlayQueueGoto, PlayControl, Action, VolumeControl, PlayerOptions, PlayQueueAddPath};
+use moped_shared::{PlayQueueGoto, PlayControl, Action, VolumeControl, PlayerOptions, PlayQueueAddPath};
 
 pub(crate) async fn status(req: Request<State>) -> tide::Result {
     let mut mpd = req.state().mpd().await?;

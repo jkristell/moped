@@ -1,9 +1,12 @@
 [package]
-name = "shared"
+name = "moped-shared"
 version = "0.1.0"
 authors = ["Johan Kristell <johan@jott.se>"]
 edition = "2018"
+description = "Mpd frontend shared data structures"
+categories = ["networking"]
+license = "MIT"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-async-mpd = { path = "../../async-mpd", default-features = false }
+async-mpd = { version = "0.2.1", default-features = false }

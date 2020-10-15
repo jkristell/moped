@@ -74,6 +74,7 @@ async fn main() -> Result<(), std::io::Error> {
     app.at("/pkg").serve_dir("../frontend/pkg")?;
     app.at("/static").serve_dir("../frontend/static")?;
 
+    /*
     app.at("/")
         .get(|_| async {
            let html = include_str!("../../frontend/index.html");
@@ -82,6 +83,7 @@ async fn main() -> Result<(), std::io::Error> {
             resp.set_content_type(tide::http::mime::HTML);
             Ok(resp)
         });
+     */
 
     app.listen("127.0.0.1:8080").await?;
     Ok(())
