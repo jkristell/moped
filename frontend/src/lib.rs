@@ -2,7 +2,7 @@
 
 use seed::{prelude::*, *};
 use serde::{Serialize};
-use shared::{PlayControl, Action, Status, Track, PlayQueueGoto, DatabaseLs, LsFilter, DatabaseLsRes, PlayQueueAddPath, VolumeControl};
+use moped_shared::{PlayControl, Action, Status, Track, PlayQueueGoto, DatabaseLs, LsFilter, DatabaseLsRes, PlayQueueAddPath, VolumeControl};
 
 // ------ ------
 //     Init
@@ -14,7 +14,7 @@ fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
     orders.perform_cmd(get_status());
     orders.perform_cmd(post_dblist());
 
-    orders.stream(streams::interval(1000, || Msg::OnTick));
+    orders.stream(streams::interval(10000, || Msg::OnTick));
 
     Model {
         message: None,
@@ -60,6 +60,7 @@ enum Msg {
     OnTick,
 
     GetDbDir(String),
+    GetArtwork(String),
     UpdateDbDirs(DatabaseLsRes),
     ChangePath (String),
     Volume(String),
@@ -126,6 +127,31 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::OnTick => {
             orders.perform_cmd(get_status());
         }
+        Msg::GetArtwork(path) => {
+
+        }
+    }
+}
+
+async fn artwork_get(path: &str) -> Msg {
+    let url = "http://localhost:8080/api/v1/artwork";
+
+    let query = moped_shared::Path {
+        path: path.to_string(),
+    };
+
+    let request = Request::new(url)
+        .method(Method::Post)
+        .json(&query)
+        .unwrap();
+
+    let response = fetch(request).await.expect("HTTP request failed");
+
+    if response.status().is_ok() {
+        let lsres = response.bytes().await.unwrap();
+        Msg::
+    } else {
+        Msg::SubmitFailed(response.status().text)
     }
 }
 
