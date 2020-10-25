@@ -14,7 +14,7 @@ fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
     orders.perform_cmd(get_status());
     orders.perform_cmd(post_dblist());
 
-    orders.stream(streams::interval(10000, || Msg::OnTick));
+    //orders.stream(streams::interval(10000, || Msg::OnTick));
 
     Model {
         message: None,
@@ -87,7 +87,12 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::UpdateDbDirs(dirs) => {
             model.dbdirs = dirs.dirs;
         }
-        Msg::ChangePath(newpath) => {
+        Msg::ChangePath(mut newpath) => {
+
+            //if newpath != "/" {
+            //    newpath = newpath.trim_end_matches('/').to_string();
+            //}
+
             model.dbpath = newpath;
         }
         Msg::PlayqueueAdd(path) => {
@@ -130,28 +135,6 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         Msg::GetArtwork(path) => {
 
         }
-    }
-}
-
-async fn artwork_get(path: &str) -> Msg {
-    let url = "http://localhost:8080/api/v1/artwork";
-
-    let query = moped_shared::Path {
-        path: path.to_string(),
-    };
-
-    let request = Request::new(url)
-        .method(Method::Post)
-        .json(&query)
-        .unwrap();
-
-    let response = fetch(request).await.expect("HTTP request failed");
-
-    if response.status().is_ok() {
-        let lsres = response.bytes().await.unwrap();
-        Msg::
-    } else {
-        Msg::SubmitFailed(response.status().text)
     }
 }
 
@@ -256,6 +239,8 @@ fn db_view(model: &Model) -> Node<Msg> {
 
     let mut current_dir = model.dbpath.to_string();
 
+    log!(current_dir);
+
     if !current_dir.ends_with('/') {
         current_dir.push('/');
     }
@@ -267,10 +252,12 @@ fn db_view(model: &Model) -> Node<Msg> {
         .split('/')
         .filter(|elem| !elem.is_empty())
         .scan(String::new(), |state, part| {
-            state.push_str(part);
             state.push('/');
+            state.push_str(part);
             Some((state.clone(), part.to_string()))
         });
+
+    log!(fullpath_display.clone().collect::<Vec<(String, String)>>());
 
 
     div![
@@ -310,24 +297,26 @@ fn db_view(model: &Model) -> Node<Msg> {
         dirs.iter()
             .map(|dirname| {
                 let fullpath = format!("{}{}", current_dir, dirname);
-                (dirname, fullpath.clone(), fullpath)
+                (dirname, fullpath.clone(), fullpath.clone(), fullpath)
             })
-            .map(|(dirname, fp1, fp2)|
+            .map(|(dirname, fp1, fp2, fp3)|
             div![
                 C!["ui card"],
-                a![
-                    C!["image"],
                     div![
-                        C!["ui placeholder"],
-                        div![C!["image"]]
+                        C!["image"],
+                        img![
+                            attrs!{
+                                At::Src => format!("/api/v1/artwork?path={}", &fp1),
+                            },
+                            ev(Ev::Click, move |_| Msg::PlayqueueAdd(fp3)),
+                        ],
                     ],
-                    ev(Ev::Click, move |_| Msg::ChangePath(fp1.clone())),
-                ],
                 div![
                     C!["content"],
                     a![
                         C!["header"],
-                        dirname
+                        dirname,
+                        ev(Ev::Click, move |_| Msg::ChangePath(fp1)),
                     ]
                 ],
                 div![
@@ -336,13 +325,58 @@ fn db_view(model: &Model) -> Node<Msg> {
                         C!["add icon"],
                     ],
                     "Add to playlist",
-                    ev(Ev::Click, move |_| Msg::PlayqueueAdd(fp2.clone())),
+                    ev(Ev::Click, move |_| Msg::PlayqueueAdd(fp2)),
                 ]
             ]
         )
     ]
     ]
     ]
+}
+
+fn folder_view(current_dir: &str, folders: &[String]) -> Vec<Node<Msg>> {
+
+    let mut rv = Vec::new();
+
+    for folder in folders {
+
+        let fullpath = format!("{}{}", current_dir, folder);
+        let fp1 = fullpath.clone();
+        let fp2 = fullpath.clone();
+        let fp3 = fullpath.clone();
+
+        let card = div![
+            C!["ui card"],
+                div![
+                    C!["image"],
+                    img![
+                        attrs!{
+                            At::Src => format!("/api/v1/artwork?path={}", &fullpath),
+                        },
+                        ev(Ev::Click, |_| Msg::PlayqueueAdd(fp1)),
+                    ],
+                ],
+            div![
+                C!["content"],
+                a![
+                    C!["header"],
+                    folder,
+                    ev(Ev::Click, |_| Msg::ChangePath(fp2)),
+                ]
+            ],
+            div![
+                C!["ui bottom attached button"],
+                i![
+                    C!["add icon"],
+                ],
+                "Add to playlist",
+                ev(Ev::Click, |_| Msg::PlayqueueAdd(fp3)),
+            ]
+        ];
+        rv.push(card)
+    }
+
+    rv
 }
 
 pub fn dirs_in_path(path: &str, dirs: &[String]) -> Vec<String> {

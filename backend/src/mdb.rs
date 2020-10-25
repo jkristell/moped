@@ -2,7 +2,7 @@ use async_mpd::{Mixed};
 use tide::{Request, Response, StatusCode, Body};
 
 use crate::State;
-use moped_shared::{DatabaseLs, LsFilter, DatabaseLsRes};
+use moped_shared::{DatabaseLs, DatabaseLsRes};
 
 pub(crate) async fn all(req: Request<State>) -> tide::Result {
     let mut mpd = req.state().mpd().await?;

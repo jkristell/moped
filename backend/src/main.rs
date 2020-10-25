@@ -7,6 +7,7 @@ use tide::security::{
 };
 use tide::utils::After;
 use async_std::io::ErrorKind;
+use crate::artwork::AlbumartCache;
 
 mod player;
 mod mdb;
@@ -16,13 +17,17 @@ mod artwork;
 struct State {
     mpdaddr: String,
     mpd: Arc<Mutex<MpdClient>>,
+    artwork: Arc<Mutex<AlbumartCache>>,
 }
+
+const MPDHOST: &'static str = "localhost:6600";
 
 impl State {
     async fn new() -> std::io::Result<State> {
         let state = State {
-            mpdaddr: String::from("localhost:6600"),
-            mpd: Arc::new(Mutex::new(MpdClient::new("localhost:6600").await.unwrap())),
+            mpdaddr: String::from(MPDHOST),
+            mpd: Arc::new(Mutex::new(MpdClient::new(MPDHOST).await.unwrap())),
+            artwork: Arc::new(Mutex::new(AlbumartCache::new())),
         };
         Ok(state)
     }
@@ -34,7 +39,7 @@ impl State {
 
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
-    femme::with_level(tide::log::Level::Debug.to_level_filter());
+    femme::with_level(tide::log::Level::Info.to_level_filter());
 
     let state = State::new().await?;
 
@@ -91,7 +96,7 @@ async fn main() -> Result<(), std::io::Error> {
     //TODO: Set server address
 
     //TODO: Album artwork
-    app.at("/api/v1/artwork").post(artwork::artwork);
+    app.at("/api/v1/artwork").get(artwork::artwork);
 
     //TODO: Search
 

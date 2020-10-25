@@ -45,7 +45,9 @@ pub(crate) async fn playqueue_addpath(mut req: Request<State>) -> tide::Result {
     let pqp: PlayQueueAddPath = req.body_json().await?;
     let mut mpd = req.state().mpd().await?;
 
-    mpd.queue_add(&pqp.path).await?;
+    let path = pqp.path.trim_start_matches('/');
+
+    mpd.queue_add(path).await?;
 
     let status = mpd.status().await?;
     let mut r = Response::new(StatusCode::Ok);
