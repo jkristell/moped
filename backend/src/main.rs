@@ -95,7 +95,6 @@ async fn main() -> Result<(), std::io::Error> {
 
     //TODO: Set server address
 
-    //TODO: Album artwork
     app.at("/api/v1/artwork").get(artwork::artwork);
 
     //TODO: Search
@@ -103,6 +102,9 @@ async fn main() -> Result<(), std::io::Error> {
     // Frontend
     app.at("/pkg").serve_dir("../frontend/pkg")?;
     app.at("/static").serve_dir("../frontend/static")?;
+
+    // Images
+    app.at("/images").serve_dir("images")?;
 
     app.at("/")
         .get(|_| async {

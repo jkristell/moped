@@ -1,23 +1,23 @@
-use tide::{Request, Response, StatusCode, Body};
-use serde::{Deserialize};
-
-use crate::State;
 use std::{
     io,
+    collections::HashMap,
 };
+
 use async_std::{
     prelude::*,
     io::ReadExt,
+    path::Path,
+    os::unix::fs::symlink,
     fs::File
 };
+use serde::{Deserialize};
 
+use tide::{Request, Response, StatusCode, Body, Redirect};
+use uuid::Uuid;
 use async_mpd::{Mixed, MpdClient};
 
-use std::collections::HashMap;
-use uuid::Uuid;
-use async_std::path::Path;
-use async_std::os::unix::fs::symlink;
-
+use crate::State;
+use std::fs::symlink_metadata;
 
 #[derive(Deserialize)]
 struct ArtworkQuery {
@@ -37,16 +37,25 @@ pub(crate) async fn artwork(req: Request<State>) -> tide::Result {
 
     log::info!("Path: {:?}", path);
 
-    let bytes = artcache
-        .front_for_path(path, &mut mpd).await?
-        .unwrap_or(vec![]);
+    let state = artcache.front_for_path(path, &mut mpd).await?;
 
-    let mut r = Response::new(StatusCode::Ok);
-    r.set_body(Body::from_bytes(bytes));
-    Ok(r)
+    match state {
+        CacheState::NoMbid => {
+            Ok(Redirect::temporary("/images/NoMbIdFound.png").into())
+        }
+        CacheState::NoArtworkFound => {
+            Ok(Redirect::temporary("/images/NoArtworkFound.png").into())
+        }
+        CacheState::Cached(mbid) => {
+            let mut r = Response::new(StatusCode::Ok);
+            let bytes = artcache.load(&mbid).await?;
+            r.set_body(Body::from_bytes(bytes));
+            Ok(r)
+        }
+    }
 }
 
-async fn coverart(mbid: &Uuid) -> tide::Result<Option<Vec<u8>>> {
+async fn from_coverartarchive(mbid: &Uuid) -> tide::Result<Option<Vec<u8>>> {
 
     let url = format!(
         "https://coverartarchive.org/release/{}/front",
@@ -56,7 +65,6 @@ async fn coverart(mbid: &Uuid) -> tide::Result<Option<Vec<u8>>> {
     log::info!("Fetching cover art: {}", url);
 
     let req = surf::get(&url);
-        //.header("Accept", "application/json");
 
      let mut res = surf::client()
          .with(surf::middleware::Redirect::default())
@@ -70,18 +78,11 @@ async fn coverart(mbid: &Uuid) -> tide::Result<Option<Vec<u8>>> {
     } else {
         Ok(None)
     }
-
-
-    /*
-    let mut r = Response::new(StatusCode::Ok);
-    r.set_body(Body::from_bytes(bytes));
-    Ok(r)
-     */
 }
 
 /// CacheState for directories
 #[derive(Debug, Copy, Clone)]
-enum CacheState {
+pub enum CacheState {
     /// No MbIds found
     NoMbid,
     /// No artwork found for mbid
@@ -111,7 +112,7 @@ impl AlbumartCache {
     }
 
 
-    pub async fn front_for_path(&mut self, path: &str, mpd: &mut MpdClient) -> Result<Option<Vec<u8>>, tide::Error> {
+    pub async fn front_for_path(&mut self, path: &str, mpd: &mut MpdClient) -> Result<CacheState, tide::Error> {
 
         // Check if this path is known to us
 
@@ -125,11 +126,10 @@ impl AlbumartCache {
             let cstate = if let Some(mbid) = maybe_mbid {
                 // See if we already downloaded artwork for this mbid
                 if self.artwork_exists(&mbid).await {
-
                     CacheState::Cached(mbid)
                 } else {
                     // Try downloading it
-                    if let Some(bytes) = coverart(&mbid).await? {
+                    if let Some(bytes) = from_coverartarchive(&mbid).await? {
                         self.save(&mbid, &bytes).await?;
                         CacheState::Cached(mbid)
                     } else {
@@ -148,11 +148,7 @@ impl AlbumartCache {
 
         log::info!("Cstate: {:?}", state);
 
-        match state {
-            CacheState::NoMbid => Ok(None),
-            CacheState::NoArtworkFound => Ok(None),
-            CacheState::Cached(mbid) => Ok(self.load(&mbid).await.ok())
-        }
+        Ok(state)
     }
 
     pub async fn mbid_for_path(path: &str, mpd: &mut MpdClient) -> Result<Option<uuid::Uuid>, tide::Error> {
@@ -164,12 +160,11 @@ impl AlbumartCache {
             .filter(|t| t.musicbrainz_albumid.is_some())
             .next()
             .and_then(|t| t.musicbrainz_albumid.clone())
-            .unwrap_or("76df3287-6cda-33eb-8e9a-044b5e15ffdd".into())
-            .parse()?;
+            .and_then(|t| t.parse().ok());
 
-        log::debug!("MbId: {}", res);
+        log::debug!("MbId: {:?}", res);
 
-        Ok(Some(res))
+        Ok(res)
     }
 
 
@@ -181,6 +176,10 @@ impl AlbumartCache {
     }
 
     pub async fn artwork_exists(&self, mbid: &Uuid) -> bool {
+        let apath = self.artwork_path(mbid) ;
+        let path = Path::new(&apath);
+        let is_symlink = symlink_metadata(path).unwrap().file_type().is_symlink();
+
         Path::new(&self.artwork_path(mbid)).exists().await
     }
 

@@ -4,11 +4,18 @@ use seed::{prelude::*, *};
 use serde::{Serialize};
 use moped_shared::{PlayControl, Action, Status, Track, PlayQueueGoto, DatabaseLs, LsFilter, DatabaseLsRes, PlayQueueAddPath, VolumeControl};
 
+pub mod pages;
+
 // ------ ------
 //     Init
 // ------ ------
 
-fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
+fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
+
+    let base_url = url.to_hash_base_url();
+    orders
+        .subscribe(Msg::UrlChanged)
+        .notify(subs::UrlChanged(url));
 
     orders.perform_cmd(playqueue_get());
     orders.perform_cmd(get_status());
@@ -17,12 +24,12 @@ fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
     //orders.stream(streams::interval(10000, || Msg::OnTick));
 
     Model {
+        base_url,
+        page_id: None,
+        browser_model: pages::browser::Model::default(),
         message: None,
         status: Status::default(),
         playqueue: Vec::default(),
-        active_tab: 0,
-        dbpath: "/".into(),
-        dbdirs: Vec::new(),
     }
 }
 
@@ -31,12 +38,37 @@ fn init(_: Url, orders: &mut impl Orders<Msg>) -> Model {
 // ------ ------
 
 struct Model {
+    base_url: Url,
+    page_id: Option<PageId>,
+
+    // Models for the pages
+    browser_model: pages::browser::Model,
+
     message: Option<String>,
     status: Status,
     playqueue: Vec<Track>,
-    active_tab: usize,
-    dbpath: String,
-    dbdirs: Vec<String>,
+}
+
+// ------ PageId ------
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum PageId {
+    Home,
+    Browser,
+}
+
+// ------ ------
+//     Urls
+// ------ ------
+
+struct_urls!();
+impl<'a> Urls<'a> {
+    pub fn home(self) -> Url {
+        self.base_url()
+    }
+    pub fn browser_urls(self) -> Url {
+        self.base_url().add_hash_path_part("browser")
+    }
 }
 
 // ------ ------
@@ -45,6 +77,10 @@ struct Model {
 
 // `Msg` describes the different events you can modify state with.
 enum Msg {
+
+    UrlChanged(subs::UrlChanged),
+    OnTick,
+
     PlayControl(Action),
     SubmitFailed(String),
 
@@ -56,11 +92,8 @@ enum Msg {
     PlayqueuePlay(u32),
     PlayqueueAdd(String),
 
-    TabSelect(usize),
-    OnTick,
 
     GetDbDir(String),
-    GetArtwork(String),
     UpdateDbDirs(DatabaseLsRes),
     ChangePath (String),
     Volume(String),
@@ -70,6 +103,17 @@ enum Msg {
 // `update` describes how to handle each `Msg`.
 fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
     match msg {
+
+        Msg::UrlChanged(subs::UrlChanged(mut url)) => {
+            model.page_id = match url.next_hash_path_part() {
+                None => Some(PageId::Home),
+                Some("browser") => {
+                    pages::browser::init(url, &mut model.browser_model).map(|_| PageId::Browser)
+                }
+                Some(_) => None,
+            };
+        }
+
         Msg::ClearPlayqueue => {
             orders.perform_cmd(playqueue_clear());
         }
@@ -85,15 +129,10 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             orders.perform_cmd(post_dblist());
         }
         Msg::UpdateDbDirs(dirs) => {
-            model.dbdirs = dirs.dirs;
+            model.browser_model.dbdirs = dirs.dirs;
         }
         Msg::ChangePath(mut newpath) => {
-
-            //if newpath != "/" {
-            //    newpath = newpath.trim_end_matches('/').to_string();
-            //}
-
-            model.dbpath = newpath;
+            model.browser_model.current_dir = newpath;
         }
         Msg::PlayqueueAdd(path) => {
             let q = PlayQueueAddPath { path };
@@ -126,14 +165,8 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
             };
             orders.perform_cmd(post_cmd("queue/goto", pqg));
         }
-        Msg::TabSelect(tabid) => {
-            model.active_tab = tabid;
-        }
         Msg::OnTick => {
             orders.perform_cmd(get_status());
-        }
-        Msg::GetArtwork(path) => {
-
         }
     }
 }
@@ -229,242 +262,10 @@ async fn post_dblist() -> Msg {
     }
 }
 
-
-
 // ------ ------
 //     View
 // ------ ------
 
-fn db_view(model: &Model) -> Node<Msg> {
-
-    let mut current_dir = model.dbpath.to_string();
-
-    log!(current_dir);
-
-    if !current_dir.ends_with('/') {
-        current_dir.push('/');
-    }
-
-    // Folders in the current dir
-    let dirs = dirs_in_path(&current_dir, &model.dbdirs);
-
-    let fullpath_display = current_dir.as_str()
-        .split('/')
-        .filter(|elem| !elem.is_empty())
-        .scan(String::new(), |state, part| {
-            state.push('/');
-            state.push_str(part);
-            Some((state.clone(), part.to_string()))
-        });
-
-    log!(fullpath_display.clone().collect::<Vec<(String, String)>>());
-
-
-    div![
-        C!["ui one column grid"],
-        div![
-            C!["column"],
-            div![
-                C!["ui breadcrumb"],
-
-                a![
-                    C!["section"],
-                    "Home",
-                    ev(Ev::Click, |_| Msg::ChangePath("/".to_string())),
-                ],
-
-                fullpath_display
-                    .map(|(fullpath, disp)| vec![
-                        div![
-                            C!["divider"],
-                            "/"
-                        ],
-                        a![
-                            C!["section"],
-                            disp,
-                            ev(Ev::Click, |_| Msg::ChangePath(fullpath)),
-                        ],
-                    ])
-            ],
-        ],
-
-
-        div![
-            C!["column"],
-            div![
-
-        C!["ui four cards"],
-        dirs.iter()
-            .map(|dirname| {
-                let fullpath = format!("{}{}", current_dir, dirname);
-                (dirname, fullpath.clone(), fullpath.clone(), fullpath)
-            })
-            .map(|(dirname, fp1, fp2, fp3)|
-            div![
-                C!["ui card"],
-                    div![
-                        C!["image"],
-                        img![
-                            attrs!{
-                                At::Src => format!("/api/v1/artwork?path={}", &fp1),
-                            },
-                            ev(Ev::Click, move |_| Msg::PlayqueueAdd(fp3)),
-                        ],
-                    ],
-                div![
-                    C!["content"],
-                    a![
-                        C!["header"],
-                        dirname,
-                        ev(Ev::Click, move |_| Msg::ChangePath(fp1)),
-                    ]
-                ],
-                div![
-                    C!["ui bottom attached button"],
-                    i![
-                        C!["add icon"],
-                    ],
-                    "Add to playlist",
-                    ev(Ev::Click, move |_| Msg::PlayqueueAdd(fp2)),
-                ]
-            ]
-        )
-    ]
-    ]
-    ]
-}
-
-fn folder_view(current_dir: &str, folders: &[String]) -> Vec<Node<Msg>> {
-
-    let mut rv = Vec::new();
-
-    for folder in folders {
-
-        let fullpath = format!("{}{}", current_dir, folder);
-        let fp1 = fullpath.clone();
-        let fp2 = fullpath.clone();
-        let fp3 = fullpath.clone();
-
-        let card = div![
-            C!["ui card"],
-                div![
-                    C!["image"],
-                    img![
-                        attrs!{
-                            At::Src => format!("/api/v1/artwork?path={}", &fullpath),
-                        },
-                        ev(Ev::Click, |_| Msg::PlayqueueAdd(fp1)),
-                    ],
-                ],
-            div![
-                C!["content"],
-                a![
-                    C!["header"],
-                    folder,
-                    ev(Ev::Click, |_| Msg::ChangePath(fp2)),
-                ]
-            ],
-            div![
-                C!["ui bottom attached button"],
-                i![
-                    C!["add icon"],
-                ],
-                "Add to playlist",
-                ev(Ev::Click, |_| Msg::PlayqueueAdd(fp3)),
-            ]
-        ];
-        rv.push(card)
-    }
-
-    rv
-}
-
-pub fn dirs_in_path(path: &str, dirs: &[String]) -> Vec<String> {
-
-    dirs.iter()
-        .filter_map(|s| {
-            if s.starts_with(path) {
-                let t = &s[path.len()..];
-                if !t.contains('/') {
-                    Some(t.to_string())
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
-fn player_controls(status: &Status) -> Node<Msg> {
-
-    div![
-        C!["column"],
-        if status.state == "play" {
-            player_button("pause", "pause", Action::Pause)
-        } else {
-            player_button("play", "play", Action::Play)
-        },
-        player_button("next", "fast forward", Action::Next),
-        button![
-            "Clear playqueue",
-            C!["ui button"],
-            ev(Ev::Click, move |_| Msg::ClearPlayqueue),
-        ],
-        input![
-            attrs! {
-                At::Type => "Range",
-                At::Min => 0,
-                At::Max => 100,
-                At::Value => status.volume.unwrap_or(0),
-            },
-            input_ev(Ev::Input, Msg::Volume),
-
-        ],
-    ]
-}
-
-fn player_button(label: &str, icon: &str, action: Action) -> Node<Msg> {
-    button![
-        label,
-        C!["ui labeled icon button"],
-        ev(Ev::Click, move |_| Msg::PlayControl(action)),
-        i![C![format!("{} icon", icon)]],
-    ]
-}
-
-fn render_playqueue(model: &Model) -> Node<Msg> {
-
-    let queue = &model.playqueue;
-
-    table![
-        C!["ui celled table small compact"],
-        thead![
-            tr![
-                th!["Title"],
-                th!["Artist"],
-                th!["Album"],
-            ]
-        ],
-        queue.iter()
-            .map(|t| (t.id.unwrap(), t))
-            .map(|(pos, track)| tr![
-                td![
-                    a![
-                        track.title.as_ref().unwrap_or(&"NoTitle".into()),
-                        ev(Ev::Click, move |_| Msg::PlayqueuePlay(pos)),
-                    ]
-                ],
-                td![
-                    track.artist.as_ref().unwrap_or(&"NoArtist".into())
-                ],
-                td![
-                    track.album.as_ref().unwrap_or(&"NoAlbum".into())
-                ],
-            ])
-    ]
-}
 
 // `view` describes what to display.
 fn view(model: &Model) -> Node<Msg> {
@@ -505,27 +306,101 @@ fn view(model: &Model) -> Node<Msg> {
                 div![
                     C!["ui top attached tabular menu"],
                     a![
-                        C!["item", IF![model.active_tab == 0 => "active"]],
+                        C!["item", IF![model.page_id == Some(PageId::Home) => "active"]],
+                        attrs! { At::Href => Urls::new(&model.base_url).home() },
                         "Queue",
-                        ev(Ev::Click, |_| Msg::TabSelect(0)),
                     ],
                     a![
-                        C!["item", IF![model.active_tab == 1 => "active"]],
-                        "Database",
-                        ev(Ev::Click, |_| Msg::TabSelect(1)),
+                        C!["item", IF![model.page_id == Some(PageId::Browser) => "active"]],
+                        attrs! { At::Href => Urls::new(&model.base_url).browser_urls() },
+                        "Filesystem",
                     ]
                 ],
                 div![
                     C!["ui bottom attached segment"],
-                    match model.active_tab {
-                        0 => render_playqueue(&model),
-                        _ => db_view(&model),
+
+                    match model.page_id {
+                        None | Some(PageId::Home) => view_playqueue(&model),
+                        Some(PageId::Browser) => pages::browser::view(&model.browser_model),
+                        _ => h2!["Empty"],
                     }
                 ]
             ]
         ],
     ]
 }
+
+fn player_controls(status: &Status) -> Node<Msg> {
+    div![
+        C!["column"],
+        if status.state == "play" {
+            player_button("pause", "pause", Action::Pause)
+        } else {
+            player_button("play", "play", Action::Play)
+        },
+        player_button("next", "fast forward", Action::Next),
+        button![
+            C!["ui button"],
+            ev(Ev::Click, move |_| Msg::ClearPlayqueue),
+            "Clear playqueue",
+        ],
+        input![
+            attrs!{
+                At::Type => "Range",
+                At::Min => 0,
+                At::Max => 100,
+                At::Value => status.volume.unwrap_or(0),
+            },
+            input_ev(Ev::Input, Msg::Volume),
+        ],
+    ]
+}
+
+fn player_button(label: &str, icon: &str, action: Action) -> Node<Msg> {
+    button![
+        C!["ui labeled icon button"],
+        i![C![format!("{} icon", icon)]],
+        label,
+        ev(Ev::Click, move |_| Msg::PlayControl(action)),
+    ]
+}
+
+
+fn view_playqueue(model: &Model) -> Node<Msg> {
+
+    let queue = &model.playqueue;
+
+    table![
+        C!["ui celled table small compact"],
+        thead![
+            tr![
+                th!["Title"],
+                th!["Artist"],
+                th!["Album"],
+            ]
+        ],
+        queue
+            .iter()
+            .map(|t| (t.id.unwrap(), t))
+            .map(|(pos, track)|
+                tr![
+                    td![
+                        a![
+                            track.title.as_ref().unwrap_or(&"NoTitle".into()),
+                            ev(Ev::Click, move |_| Msg::PlayqueuePlay(pos)),
+                        ]
+                    ],
+                    td![
+                        track.artist.as_ref().unwrap_or(&"NoArtist".into())
+                    ],
+                    td![
+                        track.album.as_ref().unwrap_or(&"NoAlbum".into())
+                    ],
+                ]
+            )
+    ]
+}
+
 
 
 // ------ ------
