@@ -18,7 +18,6 @@ pub(crate) async fn stats(req: Request<State>) -> tide::Result {
     let mut r = Response::new(StatusCode::Ok);
     r.set_body(Body::from_json(&stats)?);
     Ok(r)
-
 }
 
 pub(crate) async fn playqueue(req: Request<State>) -> tide::Result {

@@ -2,7 +2,7 @@
 
 use seed::{prelude::*, *};
 use serde::{Serialize};
-use moped_shared::{PlayControl, Action, Status, Track, PlayQueueGoto, DatabaseLs, LsFilter, DatabaseLsRes, PlayQueueAddPath, VolumeControl};
+use moped_shared::{PlayControl, Action, Status, Track, PlayQueueGoto, DatabaseLs, LsFilter, DatabaseLsRes, PlayQueueAddPath, VolumeControl, ServerSettings};
 
 pub mod pages;
 
@@ -27,6 +27,7 @@ fn init(url: Url, orders: &mut impl Orders<Msg>) -> Model {
         base_url,
         page_id: None,
         browser_model: pages::browser::Model::default(),
+        settings_model: pages::settings::Model::default(),
         message: None,
         status: Status::default(),
         playqueue: Vec::default(),
@@ -43,6 +44,7 @@ struct Model {
 
     // Models for the pages
     browser_model: pages::browser::Model,
+    settings_model: pages::settings::Model,
 
     message: Option<String>,
     status: Status,
@@ -55,6 +57,7 @@ struct Model {
 enum PageId {
     Home,
     Browser,
+    Settings,
 }
 
 // ------ ------
@@ -69,6 +72,9 @@ impl<'a> Urls<'a> {
     pub fn browser_urls(self) -> Url {
         self.base_url().add_hash_path_part("browser")
     }
+    pub fn settings_urls(self) -> Url {
+        self.base_url().add_hash_path_part("settings")
+    }
 }
 
 // ------ ------
@@ -80,6 +86,7 @@ enum Msg {
 
     UrlChanged(subs::UrlChanged),
     OnTick,
+    ServerAddress,
 
     PlayControl(Action),
     SubmitFailed(String),
@@ -109,6 +116,9 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
                 None => Some(PageId::Home),
                 Some("browser") => {
                     pages::browser::init(url, &mut model.browser_model).map(|_| PageId::Browser)
+                },
+                Some("settings") => {
+                    pages::settings::init(url, &mut model.settings_model).map(|_| PageId::Settings)
                 }
                 Some(_) => None,
             };
@@ -167,6 +177,14 @@ fn update(msg: Msg, model: &mut Model, orders: &mut impl Orders<Msg>) {
         }
         Msg::OnTick => {
             orders.perform_cmd(get_status());
+        }
+        Msg::ServerAddress => {
+
+            let settings = ServerSettings {
+                host: model.settings_model.mpdhost.clone(),
+            };
+
+            orders.perform_cmd(post_cmd("settings/server", settings));
         }
     }
 }
@@ -314,7 +332,12 @@ fn view(model: &Model) -> Node<Msg> {
                         C!["item", IF![model.page_id == Some(PageId::Browser) => "active"]],
                         attrs! { At::Href => Urls::new(&model.base_url).browser_urls() },
                         "Filesystem",
-                    ]
+                    ],
+                    a![
+                        C!["item", IF![model.page_id == Some(PageId::Settings) => "active"]],
+                        attrs! { At::Href => Urls::new(&model.base_url).settings_urls() },
+                        "Settings",
+                    ],
                 ],
                 div![
                     C!["ui bottom attached segment"],
@@ -322,6 +345,7 @@ fn view(model: &Model) -> Node<Msg> {
                     match model.page_id {
                         None | Some(PageId::Home) => view_playqueue(&model),
                         Some(PageId::Browser) => pages::browser::view(&model.browser_model),
+                        Some(PageId::Settings) => pages::settings::view(&model.settings_model),
                         _ => h2!["Empty"],
                     }
                 ]

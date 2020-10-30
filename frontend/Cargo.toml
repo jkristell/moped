@@ -16,8 +16,6 @@ wasm-bindgen-test = "0.3.12"
 
 [dependencies]
 seed = "0.8.0"
-# seed = { git = "https://github.com/seed-rs/seed", rev = "0a538f0" }
-# seed = { git = "https://github.com/seed-rs/seed", rev = "b25cf59" }
 serde = { version = "^1.0.85", features = ['derive'] }
 moped-shared = { path = "../shared" }
 

@@ -4,6 +4,12 @@ use serde::{Serialize, Deserialize};
 pub use async_mpd::{Status, Track};
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct ServerSettings {
+    pub host: String,
+}
+
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct PlayQueueGoto {
     pub id: u32,
 }
