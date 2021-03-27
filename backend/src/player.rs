@@ -1,4 +1,4 @@
-use tide::{Request, Response, StatusCode};
+use tide::{Body, Request, Response};
 
 use serde::{Deserialize};
 
@@ -7,13 +7,15 @@ use crate::State;
 pub(crate) async fn status(req: Request<State>) -> tide::Result {
     let mut mpd = req.state().mpd.lock().await;
     let status = mpd.status().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&status)?)
+
+    Ok(Response::from(Body::from_json(&status)?))
 }
 
 pub(crate) async fn stats(req: Request<State>) -> tide::Result {
     let mut mpd = req.state().mpd.lock().await;
     let stats = mpd.stats().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&stats)?)
+
+    Ok(Response::from(Body::from_json(&stats)?))
 }
 
 
@@ -33,7 +35,7 @@ pub struct PlayControl {
 
 #[derive(Deserialize, Debug)]
 pub struct VolumeControl {
-    volume: i32,
+    volume: u32,
 }
 
 #[derive(Deserialize, Debug)]
@@ -59,7 +61,7 @@ pub(crate) async fn control(mut req: Request<State>) -> tide::Result {
 
     // Get status and send that back to client
     let status = mpd.status().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&status)?)
+    Ok(Response::from(Body::from_json(&status)?))
 }
 
 pub(crate) async fn volume(mut req: Request<State>) -> tide::Result {
@@ -72,7 +74,7 @@ pub(crate) async fn volume(mut req: Request<State>) -> tide::Result {
 
     // Get status and send that back to client
     let status = mpd.status().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&status)?)
+    Ok(Response::from(Body::from_json(&status)?))
 }
 
 pub(crate) async fn options(mut req: Request<State>) -> tide::Result {
@@ -93,5 +95,5 @@ pub(crate) async fn options(mut req: Request<State>) -> tide::Result {
 
     // Get status and send that back to client
     let status = mpd.status().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&status)?)
+    Ok(Response::from(Body::from_json(&status)?))
 }

@@ -1,19 +1,20 @@
 use async_mpd::{MpdClient};
-use async_std::sync::Mutex;
+use async_std::sync::{Mutex, Arc};
 
 mod player;
 mod queue;
 
+#[derive(Clone)]
 struct State {
-    mpd: Mutex<MpdClient>,
+    mpd: Arc<Mutex<MpdClient>>,
 }
 
 #[async_std::main]
-async fn main() -> Result<(), std::io::Error> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     femme::with_level(tide::log::Level::Trace.to_level_filter());
 
     let state = State {
-        mpd: Mutex::new(MpdClient::new("localhost:6600").await?),
+        mpd: Arc::new(Mutex::new(MpdClient::new("localhost:6600").await?)),
     };
 
     let mut app = tide::with_state(state);

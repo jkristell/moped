@@ -2,3 +2,6 @@
 members = [
     "backend",
 ]
+
+[patch.crates-io]
+async-mpd = { path = "../async-mpd" }

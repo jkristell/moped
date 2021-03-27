@@ -1,16 +1,16 @@
-use tide::{Request, Response, StatusCode};
+use tide::{Request, Response, Body};
 use serde::{Deserialize};
 use crate::State;
 
 pub(crate) async fn get(req: Request<State>) -> tide::Result {
     let mut mpd = req.state().mpd.lock().await;
     let queue = mpd.queue().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&queue)?)
+    Ok(Response::from(Body::from_json(&queue)?))
 }
 
 #[derive(Deserialize, Debug)]
 pub struct PlayQueuePlay {
-    id: i32,
+    id: u32,
 }
 
 pub(crate) async fn play(mut req: Request<State>) -> tide::Result {
@@ -20,6 +20,6 @@ pub(crate) async fn play(mut req: Request<State>) -> tide::Result {
     mpd.playid(pqp.id).await?;
 
     let status = mpd.status().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&status)?)
+    Ok(Response::from(Body::from_json(&status)?))
 }
 
