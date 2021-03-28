@@ -1,10 +1,11 @@
-use tide::{Request, Response, Body};
-use serde::{Deserialize};
 use crate::State;
+use serde::Deserialize;
+use tide::{Body, Request, Response};
+
+use async_mpd::cmd;
 
 pub(crate) async fn get(req: Request<State>) -> tide::Result {
-    let mut mpd = req.state().mpd.lock().await;
-    let queue = mpd.queue().await?;
+    let queue = req.state().exec(&cmd::PlaylistInfo).await?;
     Ok(Response::from(Body::from_json(&queue)?))
 }
 
@@ -15,11 +16,9 @@ pub struct PlayQueuePlay {
 
 pub(crate) async fn play(mut req: Request<State>) -> tide::Result {
     let pqp: PlayQueuePlay = req.body_json().await?;
-    let mut mpd = req.state().mpd.lock().await;
 
-    mpd.playid(pqp.id).await?;
+    req.state().exec(&cmd::PlayId(pqp.id)).await?;
 
-    let status = mpd.status().await?;
+    let status = req.state().exec(&cmd::Status).await?;
     Ok(Response::from(Body::from_json(&status)?))
 }
-

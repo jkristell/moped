@@ -1,23 +1,27 @@
 use tide::{Body, Request, Response};
 
-use serde::{Deserialize};
+use serde::Deserialize;
 
 use crate::State;
+use async_mpd::cmd;
 
 pub(crate) async fn status(req: Request<State>) -> tide::Result {
-    let mut mpd = req.state().mpd.lock().await;
-    let status = mpd.status().await?;
-
+    let status = req.state().exec(&cmd::Status).await?;
     Ok(Response::from(Body::from_json(&status)?))
 }
 
 pub(crate) async fn stats(req: Request<State>) -> tide::Result {
-    let mut mpd = req.state().mpd.lock().await;
-    let stats = mpd.stats().await?;
-
+    let stats = req.state().exec(&cmd::Stats).await?;
     Ok(Response::from(Body::from_json(&stats)?))
 }
 
+pub(crate) async fn connect(req: Request<State>) -> tide::Result {
+
+    //req.state()
+
+    let status = req.state().exec(&cmd::Status).await?;
+    Ok(Response::from(Body::from_json(&status)?))
+}
 
 #[derive(Deserialize, Debug)]
 pub enum Action {
@@ -47,53 +51,50 @@ pub struct PlayerOptions {
 
 pub(crate) async fn control(mut req: Request<State>) -> tide::Result {
     let ctrl: PlayControl = req.body_json().await?;
-    let mut mpd = req.state().mpd.lock().await;
 
     log::info!("ctrl: {:?}", ctrl);
 
     match ctrl.action {
-        Action::Play => mpd.play().await?,
-        Action::Pause => mpd.pause().await?,
-        Action::Stop => mpd.stop().await?,
-        Action::Prev => mpd.prev().await?,
-        Action::Next => mpd.next().await?,
-    }
+        Action::Play =>  { req.state().exec(&cmd::PlayPause(true)).await? },
+        Action::Pause => { req.state().exec(&cmd::PlayPause(false)).await? },
+        Action::Stop =>  { req.state().exec(&cmd::Stop).await? },
+        Action::Prev =>  { req.state().exec(&cmd::Prev).await? },
+        Action::Next =>  { req.state().exec(&cmd::Next).await? },
+    };
 
     // Get status and send that back to client
-    let status = mpd.status().await?;
+    let status = req.state().exec(&cmd::Status).await?;
+
     Ok(Response::from(Body::from_json(&status)?))
 }
 
 pub(crate) async fn volume(mut req: Request<State>) -> tide::Result {
     let ctrl: VolumeControl = req.body_json().await?;
-    let mut mpd = req.state().mpd.lock().await;
 
-    mpd.setvol(ctrl.volume).await?;
-
+    req.state().exec(&cmd::Setvol(ctrl.volume)).await?;
     log::info!("ctrl: {:?}", ctrl);
 
     // Get status and send that back to client
-    let status = mpd.status().await?;
+    let status = req.state().exec(&cmd::Status).await?;
     Ok(Response::from(Body::from_json(&status)?))
 }
 
 pub(crate) async fn options(mut req: Request<State>) -> tide::Result {
     let options: PlayerOptions = req.body_json().await?;
-    let mut mpd = req.state().mpd.lock().await;
 
     if let Some(v) = options.repeat {
-        mpd.repeat(v).await?;
+        req.state().exec(&cmd::Repeat(v)).await?;
     }
 
     if let Some(v) = options.random {
-        mpd.random(v).await?;
+        req.state().exec(&cmd::Random(v)).await?;
     }
 
     if let Some(v) = options.consume {
-        mpd.consume(v).await?;
+        req.state().exec(&cmd::Consume(v)).await?;
     }
 
-    // Get status and send that back to client
-    let status = mpd.status().await?;
+    // Get new status and send that back to client
+    let status = req.state().exec(&cmd::Status).await?;
     Ok(Response::from(Body::from_json(&status)?))
 }
