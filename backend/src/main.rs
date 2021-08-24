@@ -1,4 +1,4 @@
-use async_mpd::resphandler::ResponseHandler;
+use async_mpd::ResponseHandler;
 use async_mpd::{MpdClient};
 use async_std::sync::{Arc, Mutex};
 
@@ -7,30 +7,27 @@ mod queue;
 
 #[derive(Clone)]
 struct State {
-    mpd: Arc<Mutex<Option<MpdClient>>>,
+    mpd: Arc<Mutex<MpdClient>>,
+    mpd_addr: String,
 }
 
 impl State {
 
-    pub async fn exec<Cmd: async_mpd::cmd::MpdCmd>(
+    pub async fn exec<Cmd: async_mpd::cmd::MpdCmd + Copy>(
         &self,
-        cmd: &Cmd,
-    ) -> Result<<Cmd::ResponseHandler as ResponseHandler>::Response, async_mpd::Error> {
+        cmd: Cmd,
+    ) -> Result<<Cmd::Handler as ResponseHandler>::Response, async_mpd::Error> {
 
-        let mut guard = self.mpd.lock().await;
-
-        let mpd = guard
-            .as_mut()
-            .ok_or(async_mpd::Error::Disconnected)?;
+        let mut mpd = self.mpd.lock().await;
 
         let mut tries = 0;
 
         let ret = loop {
-            match mpd.cmd(cmd).await {
+            match mpd.exec(cmd).await {
                 Ok(resp) => break Ok(resp),
                 Err(async_mpd::Error::Disconnected) => {
                     println!("Server disconnected. Trying to reconnect");
-                    mpd.reconnect().await?;
+                    mpd.connect(&self.mpd_addr).await?;
                 }
                 Err(other) => {
                     println!("Error: {:?}", other);
@@ -43,6 +40,8 @@ impl State {
             if tries > 3 {
                 break Err(async_mpd::Error::Disconnected);
             }
+
+            //TODO: Add delay
         };
 
         ret
@@ -54,7 +53,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     femme::with_level(tide::log::Level::Trace.to_level_filter());
 
     let state = State {
-        mpd: Arc::new(Mutex::new(None)),
+        mpd: Arc::new(Mutex::new(MpdClient::new())),
+        mpd_addr: "localhost:6600".into(),
     };
 
     let mut app = tide::with_state(state);
