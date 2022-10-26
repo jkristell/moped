@@ -1,40 +1,68 @@
-use async_mpd::{MpdClient};
-use async_std::sync::Mutex;
+use async_mpd::MpdClient;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::{body, Router};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tower_http::trace::TraceLayer;
+use tracing::{info, warn};
+use tracing_subscriber::EnvFilter;
 
 mod player;
 mod queue;
 
-struct State {
-    mpd: Mutex<MpdClient>,
+#[derive(Clone)]
+pub(crate) struct AppState {
+    mpd: Arc<Mutex<MpdClient>>,
 }
 
-#[async_std::main]
-async fn main() -> Result<(), std::io::Error> {
-    femme::with_level(tide::log::Level::Trace.to_level_filter());
+#[tokio::main]
+async fn main() -> Result<(), anyhow::Error> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
 
-    let state = State {
-        mpd: Mutex::new(MpdClient::new("localhost:6600").await?),
+    // Create the router
+    let app = app().await;
+
+    let addr = "127.0.0.1:8080".parse().unwrap();
+
+    info!("Running: {:?}", addr);
+
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await?;
+
+    Ok(())
+}
+
+async fn app() -> Router<AppState> {
+    let state = AppState {
+        mpd: Arc::new(Mutex::new(MpdClient::new())),
     };
 
-    let mut app = tide::with_state(state);
+    Router::with_state(state)
+        .nest("/api/v1", player::other_routes())
+        .nest("/api/v1/player", player::routes())
+        .nest("/api/v1/queue", queue::routes())
+        .layer(TraceLayer::new_for_http())
+    //.fallback(handler_404.into_service())
+}
 
-    // Status and statistics
-    app.at("/api/v1/status").get(player::status);
-    app.at("/api/v1/stats").get(player::stats);
+#[derive(thiserror::Error, Debug)]
+pub enum AppError {
+    #[error("mpd")]
+    Mpd(#[from] async_mpd::Error),
+}
 
-    // Player control and options
-    app.at("/api/v1/player/control").post(player::control);
-    app.at("/api/v1/player/volume").post(player::volume);
-    app.at("/api/v1/player/options").post(player::options);
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
 
-    // Queue and playlists
-    app.at("/api/v1/queue").get(queue::get);
-    app.at("/api/v1/queue/play").post(queue::play);
+        warn!("Error: {:?}", self);
 
-    //TODO: Database queries
-
-    //TODO: Search & find
-
-    app.listen("127.0.0.1:8080").await?;
-    Ok(())
+        Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(body::boxed(body::Full::from("")))
+            .unwrap()
+    }
 }

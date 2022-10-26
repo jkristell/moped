@@ -1,25 +1,35 @@
-use tide::{Request, Response, StatusCode};
-use serde::{Deserialize};
-use crate::State;
+use crate::{AppError, AppState};
+use async_mpd::{Status, Track};
+use axum::extract::State;
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use serde::Deserialize;
 
-pub(crate) async fn get(req: Request<State>) -> tide::Result {
-    let mut mpd = req.state().mpd.lock().await;
+pub(crate) fn routes() -> Router<AppState> {
+    Router::inherit_state()
+        .route("/", get(index))
+        .route("/play", post(play))
+}
+
+pub(crate) async fn index(State(state): State<AppState>) -> Result<Json<Vec<Track>>, AppError> {
+    let mut mpd = state.mpd.lock().await;
     let queue = mpd.queue().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&queue)?)
+    Ok(Json(queue))
 }
 
 #[derive(Deserialize, Debug)]
 pub struct PlayQueuePlay {
-    id: i32,
+    id: u32,
 }
 
-pub(crate) async fn play(mut req: Request<State>) -> tide::Result {
-    let pqp: PlayQueuePlay = req.body_json().await?;
-    let mut mpd = req.state().mpd.lock().await;
+pub(crate) async fn play(
+    State(state): State<AppState>,
+    Json(pqp): Json<PlayQueuePlay>,
+) -> Result<Json<Status>, AppError> {
+    let mut mpd = state.mpd.lock().await;
 
     mpd.playid(pqp.id).await?;
 
     let status = mpd.status().await?;
-    Ok(Response::new(StatusCode::Ok).body_json(&status)?)
+    Ok(Json(status))
 }
-

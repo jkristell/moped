@@ -2,3 +2,6 @@
 members = [
     "backend",
 ]
+
+[patch.crates-io.axum]
+git = "https://github.com/tokio-rs/axum"
